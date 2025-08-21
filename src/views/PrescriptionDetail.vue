@@ -3,12 +3,14 @@ import { onMounted, ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, __test__ } from '../services/mockApi'
 import { ElMessage } from 'element-plus'
+import { useStore } from 'vuex'
 import type { Prescription } from '../types'
 
 const route = useRoute()
+const store = useStore()
 const data = ref<Prescription | null>(null)
 const loading = ref(false)
-const errors = ref<string[]>([])
+const fulfilling = ref(false)
 
 const load = async () => {
 	loading.value = true
@@ -28,17 +30,22 @@ const check = computed(() => {
 })
 
 const fulfill = async () => {
-	if (!data.value) return
+	if (!data.value || fulfilling.value) return
 	if (!check.value.ok) {
 		ElMessage.error('存在校验错误，无法履约')
 		return
 	}
-	const res = await api.fulfillPrescription(data.value.id)
-	if (res.success) {
-		ElMessage.success('履约成功')
-		await load()
-	} else {
-		ElMessage.error(res.errors?.join('；') ?? '履约失败')
+	fulfilling.value = true
+	try {
+		const res = await store.dispatch('fulfillPrescription', data.value.id)
+		if (res?.success) {
+			ElMessage.success('履约成功')
+			await load()
+		} else {
+			ElMessage.error(res?.errors?.join('；') ?? '履约失败')
+		}
+	} finally {
+		fulfilling.value = false
 	}
 }
 </script>
@@ -63,7 +70,7 @@ const fulfill = async () => {
 				</el-alert>
 			</div>
 			<div class="mt-2">
-				<el-button type="primary" :disabled="!check.ok" @click="fulfill">履约</el-button>
+				<el-button type="primary" :disabled="!check.ok || fulfilling" :loading="fulfilling" @click="fulfill">履约</el-button>
 			</div>
 		</template>
 	</el-card>

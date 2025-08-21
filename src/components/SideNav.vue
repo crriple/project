@@ -22,6 +22,10 @@ const active = computed(() => route.path)
       :collapse-transition="false"
       class="menu"
     >
+      <el-menu-item index="/home">
+        <el-icon><Document /></el-icon>
+        <span>首页</span>
+      </el-menu-item>
       <el-menu-item index="/drugs">
         <el-icon><Goods /></el-icon>
         <span>药品管理</span>
@@ -37,6 +41,10 @@ const active = computed(() => route.path)
       <el-menu-item index="/audit-logs">
         <el-icon><List /></el-icon>
         <span>审计日志</span>
+      </el-menu-item>
+      <el-menu-item index="/operation-logs">
+        <el-icon><List /></el-icon>
+        <span>操作日志</span>
       </el-menu-item>
     </el-menu>
   </div>

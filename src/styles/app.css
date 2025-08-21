@@ -5,3 +5,12 @@ html, body, #app { height: 100%; margin: 0; }
 .el-aside { background: var(--el-bg-color); }
 .el-header { background: var(--el-bg-color); }
 .app-main { padding: 16px; }
+
+
+/* 让上传按钮与其他按钮同一行且有间距 */
+.inline-upload { display: inline-block; margin-right: 8px; }
+.inline-upload :deep(.el-upload){ display: inline-block; }
+.inline-upload :deep(.el-upload-list){ display: none; }
+
+
+

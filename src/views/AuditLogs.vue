@@ -19,7 +19,7 @@ onMounted(fetch)
 </script>
 
 <template>
-	<el-card>
+	<el-card class="mb-4">
 		<template #header>审计日志</template>
 		<el-form inline @submit.prevent>
 			<el-form-item label="患者ID">
@@ -57,4 +57,10 @@ onMounted(fetch)
 			</el-table-column>
 		</el-table>
 	</el-card>
-</template> 
+
+
+</template>
+
+<style scoped>
+.mb-4{ margin-bottom: 16px; }
+</style> 
