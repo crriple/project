@@ -75,13 +75,14 @@ import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { useI18n } from 'vue-i18n'
 import { Search, Setting, User, SwitchButton } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import SideNav from './SideNav.vue'
 import { pageSearchData } from '../locales'
 
 const store = useStore()
 const router = useRouter()
 const { t, locale } = useI18n()
-const asideWidth = '220px'
+const asideWidth = '260px'
 
 // 认证检查
 const isAuthed = computed(() => !!store.state.token)
@@ -98,12 +99,23 @@ const searchVisible = ref(false)
 const searchQuery = ref('')
 const searchResults = ref<typeof pageSearchData>([])
 
-const logout = () => {
-	store.dispatch('logout')
-	// 清除本地存储的认证信息
-	localStorage.removeItem('token')
-	localStorage.removeItem('username')
-	router.replace('/login')
+const logout = async () => {
+	try {
+		await ElMessageBox.confirm(
+			'确认要退出登录吗？',
+			'退出确认',
+			{ type: 'warning', confirmButtonText: '确认', cancelButtonText: '取消' }
+		)
+		// 先本地清理并立即跳转
+		store.commit('setAuth', { token: null, username: null })
+		localStorage.removeItem('token')
+		localStorage.removeItem('username')
+		router.replace('/login')
+		// 后台调用登出接口（忽略结果，不阻塞跳转）
+		store.dispatch('logout').catch(() => {})
+	} catch (e) {
+		// 用户取消，无需处理
+	}
 }
 
 const onCommand = (cmd: string) => {

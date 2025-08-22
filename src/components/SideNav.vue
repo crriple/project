@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Goods, OfficeBuilding, Document, List } from '@element-plus/icons-vue'
+import { Goods, OfficeBuilding, Document, DocumentCopy, House, Operation } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 const route = useRoute()
@@ -12,7 +12,7 @@ const active = computed(() => route.path)
 <template>
   <div class="sidenav">
     <div class="brand">
-      <span class="title">处方履约系统</span>
+      <span class="title">{{ t('app.title') }}</span>
     </div>
     <el-menu
       router
@@ -22,7 +22,7 @@ const active = computed(() => route.path)
       class="menu"
     >
       <el-menu-item index="/home">
-        <el-icon><Document /></el-icon>
+        <el-icon><House /></el-icon>
         <span>{{ t('nav.home') }}</span>
       </el-menu-item>
       <el-menu-item index="/drugs">
@@ -38,11 +38,11 @@ const active = computed(() => route.path)
         <span>{{ t('nav.prescriptions') }}</span>
       </el-menu-item>
       <el-menu-item index="/audit-logs">
-        <el-icon><List /></el-icon>
+        <el-icon><DocumentCopy /></el-icon>
         <span>{{ t('nav.auditLogs') }}</span>
       </el-menu-item>
       <el-menu-item index="/operation-logs">
-        <el-icon><List /></el-icon>
+        <el-icon><Operation /></el-icon>
         <span>{{ t('nav.operationLogs') }}</span>
       </el-menu-item>
     </el-menu>

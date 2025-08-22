@@ -1,4 +1,7 @@
 export default {
+	app: {
+		title: '处方履约系统'
+	},
 	nav: {
 		home: '首页',
 		drugs: '药品管理',

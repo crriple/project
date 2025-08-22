@@ -158,11 +158,13 @@ const resetQuery = () => {
 			</el-form-item>
 		</el-form>
 
-		<el-table v-loading="listLoading" :data="paginatedPrescriptions" class="data-table">
+		<el-table v-loading="listLoading" :data="paginatedPrescriptions" class="data-table" style="width: 100%">
 			<el-table-column :prop="'id'" :label="t('drugs.id')" width="120" />
 			<el-table-column :prop="'patientId'" :label="t('prescriptions.patientId')" width="140" />
 			<el-table-column :prop="'pharmacyId'" :label="t('prescriptions.pharmacyId')" width="140" />
 			<el-table-column :prop="'status'" :label="t('common.status')" width="120" />
+			<!-- 自适应占位列，用于填充剩余空间，避免右侧空白 -->
+			<el-table-column />
 			<el-table-column :label="t('common.operation')" width="320" fixed="right">
 				<template #default="{ row }">
 					<router-link :to="`/prescriptions/${row.id}`"><el-button type="primary" link>{{ t('common.details') }}</el-button></router-link>

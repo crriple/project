@@ -447,9 +447,11 @@ const downloadTemplate = () => {
 			</el-form-item>
 		</el-form>
 
-		<el-table v-loading="listLoading" :data="paginatedPharmacies" class="data-table">
+		<el-table v-loading="listLoading" :data="paginatedPharmacies" class="data-table" style="width: 100%">
 			<el-table-column :prop="'id'" :label="t('drugs.id')" width="120" />
 			<el-table-column :prop="'name'" :label="t('drugs.name')" width="200" />
+			<!-- 自适应占位列，用于填充剩余空间，避免右侧空白 -->
+			<el-table-column />
 			<el-table-column :label="t('common.operation')" width="280" fixed="right">
 				<template #default="{ row }">
 					<router-link :to="`/pharmacies/${row.id}`"><el-button type="primary" link>{{ t('common.details') }}</el-button></router-link>

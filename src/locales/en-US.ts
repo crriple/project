@@ -1,4 +1,7 @@
 export default {
+	app: {
+		title: 'Prescription Fulfillment System'
+	},
 	nav: {
 		home: 'Home',
 		drugs: 'Drug Management',

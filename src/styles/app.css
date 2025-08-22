@@ -12,5 +12,11 @@ html, body, #app { height: 100%; margin: 0; }
 .inline-upload :deep(.el-upload){ display: inline-block; }
 .inline-upload :deep(.el-upload-list){ display: none; }
 
+/* 移除按钮点击/聚焦时的黑色边框与阴影 */
+:root :where(.el-button:focus, .el-button:focus-visible, .el-button:active, .el-button.is-circle:focus) {
+	outline: none !important;
+	box-shadow: none !important;
+}
+
 
 
