@@ -65,3 +65,4 @@ export const pageSearchData = [
 		keywords: ['系统', 'system', '设置', '配置', '参数'],
 	},
 ]
+

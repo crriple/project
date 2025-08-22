@@ -1,4 +1,4 @@
-import type { Drug, Pharmacy, Prescription, AuditLog, OperationLog, UserProfile, SystemSettings } from '../types'
+import type { Drug, Pharmacy, Prescription, AuditLog, OperationLog } from '../types'
 
 // 药品数据
 export const mockDrugs: Drug[] = [
@@ -26,7 +26,7 @@ export const mockDrugs: Drug[] = [
 		manufacturer: '感冒药厂',
 		batch: 'B2024003',
 		expiry: '2024-12-31',
-		stock: 120,
+		stock: 0, // 调整为0库存，用于测试库存不足
 		limit: 60,
 	},
 	{
@@ -54,17 +54,28 @@ export const mockPharmacies: Pharmacy[] = [
 	{
 		id: 'PH001',
 		name: '中心药房',
-		allocatedDrugs: ['D001', 'D002', 'D003'],
+		allocatedDrugs: [
+			{ drugId: 'D001', drugName: '布洛芬', limit: 50 },
+			{ drugId: 'D002', drugName: '阿司匹林', limit: 40 },
+			{ drugId: 'D003', drugName: '感冒灵', limit: 60 },
+		],
 	},
 	{
 		id: 'PH002',
 		name: '门诊药房',
-		allocatedDrugs: ['D001', 'D004'],
+		allocatedDrugs: [
+			{ drugId: 'D001', drugName: '布洛芬', limit: 50 },
+			{ drugId: 'D004', drugName: '维生素C', limit: 100 },
+		],
 	},
 	{
 		id: 'PH003',
 		name: '住院药房',
-		allocatedDrugs: ['D002', 'D003', 'D005'],
+		allocatedDrugs: [
+			{ drugId: 'D002', drugName: '阿司匹林', limit: 40 },
+			{ drugId: 'D003', drugName: '感冒灵', limit: 60 },
+			{ drugId: 'D005', drugName: '钙片', limit: 75 },
+		],
 	},
 ]
 
@@ -85,57 +96,64 @@ export const mockPrescriptions: Prescription[] = [
 		patientId: 'PAT002',
 		pharmacyId: 'PH002',
 		drugs: [{ drugId: 'D004', dosage: 3 }],
-		status: 'FULFILLED',
+		status: 'PENDING',
 	},
 	{
 		id: 'P003',
 		patientId: 'PAT003',
 		pharmacyId: 'PH003',
 		drugs: [
-			{ drugId: 'D003', dosage: 1 },
+			{ drugId: 'D003', dosage: 1 }, // 需要1个感冒灵，但库存为0
 			{ drugId: 'D005', dosage: 2 },
 		],
-		status: 'FAILED',
+		status: 'PENDING',
 	},
 ]
 
 // 审计日志数据
 export const mockAuditLogs: AuditLog[] = [
 	{
-		id: 'AL001',
 		prescriptionId: 'P001',
 		patientId: 'PAT001',
 		pharmacyId: 'PH001',
 		status: 'SUCCESS',
-		timestamp: '2024-01-15T10:30:00Z',
-		details: '处方验证通过',
+		drugsRequested: [
+			{ drugId: 'D001', dosage: 2 },
+			{ drugId: 'D002', dosage: 1 },
+		],
+		drugsDispensed: [
+			{ drugId: 'D001', dosage: 2 },
+			{ drugId: 'D002', dosage: 1 },
+		],
+		failureReasons: [],
 	},
 	{
-		id: 'AL002',
 		prescriptionId: 'P002',
 		patientId: 'PAT002',
 		pharmacyId: 'PH002',
 		status: 'SUCCESS',
-		timestamp: '2024-01-15T11:15:00Z',
-		details: '处方履约成功',
+		drugsRequested: [{ drugId: 'D004', dosage: 3 }],
+		drugsDispensed: [{ drugId: 'D004', dosage: 3 }],
+		failureReasons: [],
 	},
 	{
-		id: 'AL003',
 		prescriptionId: 'P003',
 		patientId: 'PAT003',
 		pharmacyId: 'PH003',
 		status: 'FAILED',
-		timestamp: '2024-01-15T14:20:00Z',
-		details: '库存不足',
-		failureReasons: ['药品D003库存不足', '药品D005库存不足'],
+		drugsRequested: [
+			{ drugId: 'D003', dosage: 1 },
+			{ drugId: 'D005', dosage: 2 },
+		],
+		drugsDispensed: [],
+		failureReasons: ['药品感冒灵库存不足'],
 	},
 ]
 
 // 操作日志数据
 export const mockOperationLogs: OperationLog[] = [
 	{
-		id: 'OL001',
-		timestamp: '2024-01-15T09:00:00Z',
+		timestamp: '2024-01-15T10:30:00Z',
 		user: 'admin',
 		action: 'LOGIN',
 		targetType: 'AUTH',
@@ -143,70 +161,41 @@ export const mockOperationLogs: OperationLog[] = [
 		details: '用户登录系统',
 	},
 	{
-		id: 'OL002',
-		timestamp: '2024-01-15T10:00:00Z',
-		user: 'admin',
+		timestamp: '2024-01-15T11:15:00Z',
+		user: 'pharmacist',
 		action: 'CREATE',
-		targetType: 'DRUG',
-		targetId: 'D006',
-		details: '新增药品：感冒药',
-	},
-	{
-		id: 'OL003',
-		timestamp: '2024-01-15T11:00:00Z',
-		user: 'pharmacist',
-		action: 'UPDATE',
-		targetType: 'PRESCRIPTION',
-		targetId: 'P002',
-		details: '更新处方状态为已履约',
-	},
-	{
-		id: 'OL004',
-		timestamp: '2024-01-15T12:00:00Z',
-		user: 'admin',
-		action: 'DELETE',
-		targetType: 'DRUG',
-		targetId: 'D007',
-		details: '删除过期药品',
-	},
-	{
-		id: 'OL005',
-		timestamp: '2024-01-15T13:00:00Z',
-		user: 'pharmacist',
-		action: 'FULFILL',
 		targetType: 'PRESCRIPTION',
 		targetId: 'P001',
-		details: '处理处方履约',
+		details: '创建新处方',
+	},
+	{
+		timestamp: '2024-01-15T14:20:00Z',
+		user: 'admin',
+		action: 'LOGOUT',
+		targetType: 'AUTH',
+		targetId: 'admin',
+		details: '用户登出系统',
 	},
 ]
 
-// 用户资料数据
-export const mockUserProfile: UserProfile = {
-	username: 'admin',
-	password: '123456',
-	phone: '13800138000',
-	email: 'admin@example.com',
-}
-
-// 系统设置数据
-export const mockSystemSettings: SystemSettings = {
-	prescriptionStatusEditable: true,
-	drugStatusEditable: true,
-	smsReminderEnabled: false,
-}
-
-// 用户认证数据
+// 用户数据
 export const mockUsers = [
 	{
+		id: 'U001',
 		username: 'admin',
-		password: '123456',
-		phone: '13800138000',
-		email: 'admin@example.com',
+		password: 'admin123',
+		role: 'ADMIN',
 	},
 	{
+		id: 'U002',
 		username: 'pharmacist',
-		password: '123456',
-		phone: '13800138001',
-		email: 'pharmacist@example.com',
+		password: 'pharm123',
+		role: 'PHARMACIST',
+	},
+	{
+		id: 'U003',
+		username: 'doctor',
+		password: 'doctor123',
+		role: 'DOCTOR',
 	},
 ]

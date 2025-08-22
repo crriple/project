@@ -1,340 +1,345 @@
-import type { Drug, Pharmacy, Prescription, AuditLog, OperationLog, UserProfile, SystemSettings } from '../types'
-import { 
-	mockDrugs, 
-	mockPharmacies, 
-	mockPrescriptions, 
-	mockAuditLogs, 
-	mockOperationLogs, 
-	mockUserProfile, 
-	mockSystemSettings, 
-	mockUsers 
-} from './mockData'
+import type {
+	Drug,
+	Pharmacy,
+	Prescription,
+	FulfillmentResponse,
+	AuditLog,
+	AuditLogFilter,
+	PrescriptionDrugItem,
+	OperationLog,
+} from '../types'
 
-// 模拟延迟
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const delay = (ms = 300) => new Promise((r) => setTimeout(r, ms))
 
-// 模拟数据存储
-let _drugs = [...mockDrugs]
-let _pharmacies = [...mockPharmacies]
-let _prescriptions = [...mockPrescriptions]
-let _auditLogs = [...mockAuditLogs]
-let _operationLogs = [...mockOperationLogs]
-let _users = [...mockUsers]
-let _settings = { ...mockSystemSettings }
+// Simple mock users
+const users = [{ username: 'admin', password: '123456' }]
 
-// 生成唯一ID
-const generateId = (prefix: string) => `${prefix}${Date.now()}`
+// Operation logs
+let operationLogs: OperationLog[] = []
 
-// 药品相关API
-export const drugsApi = {
+function logOp(entry: Omit<OperationLog, 'timestamp'>) {
+	operationLogs.unshift({ ...entry, timestamp: new Date().toISOString() })
+}
+
+// In-memory data
+let drugs: Drug[] = [
+	{
+		id: 'D001',
+		name: '布洛芬 (Ibuprofen)',
+		manufacturer: 'ACME 制药',
+		batch: 'B202403',
+		expiry: '2026-01-01',
+		stock: 150,
+		limit: 200,
+	},
+	{
+		id: 'D002',
+		name: '扑热息痛 (Paracetamol)',
+		manufacturer: 'ACME 制药',
+		batch: 'B202402',
+		expiry: '2024-01-01',
+		stock: 0,
+		limit: 100,
+	},
+	{
+		id: 'D003',
+		name: '阿莫西林 (Amoxicillin)',
+		manufacturer: '华康制药',
+		batch: 'B202405',
+		expiry: '2026-06-30',
+		stock: 500,
+		limit: 300,
+	},
+	{
+		id: 'D004',
+		name: '氯雷他定 (Loratadine)',
+		manufacturer: '康宁制药',
+		batch: 'B202406',
+		expiry: '2027-12-31',
+		stock: 250,
+		limit: 200,
+	},
+	{
+		id: 'D005',
+		name: '头孢克肟 (Cefixime)',
+		manufacturer: '齐鲁制药',
+		batch: 'B202401',
+		expiry: '2025-11-30',
+		stock: 80,
+		limit: 120,
+	},
+]
+
+let pharmacies: Pharmacy[] = [
+	{
+		id: 'PH001',
+		name: '成都总店',
+		allocatedDrugs: [
+			{ drugId: 'D001', drugName: '布洛芬', limit: 200 },
+			{ drugId: 'D002', drugName: '扑热息痛', limit: 100 },
+		],
+	},
+	{
+		id: 'PH002',
+		name: '高新分店',
+		allocatedDrugs: [{ drugId: 'D001', drugName: '布洛芬', limit: 50 }],
+	},
+]
+
+let prescriptions: Prescription[] = [
+	{
+		id: 'RX123',
+		patientId: 'P001',
+		pharmacyId: 'PH001',
+		drugs: [
+			{ drugId: 'D001', dosage: 400 },
+			{ drugId: 'D002', dosage: 500 },
+		],
+		status: 'PENDING',
+	},
+	{
+		id: 'RX124',
+		patientId: 'P002',
+		pharmacyId: 'PH001',
+		drugs: [
+			{ drugId: 'D003', dosage: 250 },
+			{ drugId: 'D004', dosage: 20 },
+		],
+		status: 'PENDING',
+	},
+	{
+		id: 'RX125',
+		patientId: 'P003',
+		pharmacyId: 'PH002',
+		drugs: [
+			{ drugId: 'D001', dosage: 30 },
+		],
+		status: 'FULFILLED',
+	},
+	{
+		id: 'RX126',
+		patientId: 'P004',
+		pharmacyId: 'PH001',
+		drugs: [
+			{ drugId: 'D002', dosage: 150 },
+		],
+		status: 'FAILED',
+	},
+]
+
+let auditLogs: AuditLog[] = [
+	{
+		prescriptionId: 'RX125',
+		patientId: 'P003',
+		pharmacyId: 'PH002',
+		status: 'SUCCESS',
+		drugsRequested: [{ drugId: 'D001', dosage: 30 }],
+		drugsDispensed: [{ drugId: 'D001', dosage: 30 }],
+		failureReasons: [],
+	},
+	{
+		prescriptionId: 'RX126',
+		patientId: 'P004',
+		pharmacyId: 'PH001',
+		status: 'FAILED',
+		drugsRequested: [{ drugId: 'D002', dosage: 150 }],
+		drugsDispensed: [],
+		failureReasons: ['药品 D002 已过期', '库存不足'],
+	},
+	{
+		prescriptionId: 'RX123',
+		patientId: 'P001',
+		pharmacyId: 'PH001',
+		status: 'FAILED',
+		drugsRequested: [
+			{ drugId: 'D001', dosage: 400 },
+			{ drugId: 'D002', dosage: 500 },
+		],
+		drugsDispensed: [],
+		failureReasons: ['药品 D002 已过期', '药品 D001 超出药房分配限额'],
+	},
+]
+
+const isExpired = (expiry: string) => new Date(expiry).getTime() < Date.now()
+
+const getPharmacyAllocationLimit = (pharmacyId: string, drugId: string): number | undefined => {
+	const ph = pharmacies.find((p) => p.id === pharmacyId)
+	return ph?.allocatedDrugs.find((a) => a.drugId === drugId)?.limit
+}
+
+const checkPrescription = (p: Prescription): { ok: boolean; errors: string[] } => {
+	const errors: string[] = []
+	for (const item of p.drugs) {
+		const d = drugs.find((x) => x.id === item.drugId)
+		if (!d) {
+			errors.push(`药品 ${item.drugId} 不存在`)
+			continue
+		}
+		if (isExpired(d.expiry)) {
+			errors.push(`药品 ${item.drugId} 已过期`)
+		}
+		const allocLimit = getPharmacyAllocationLimit(p.pharmacyId, item.drugId)
+		if (allocLimit != null && item.dosage > allocLimit) {
+			errors.push(`药品 ${item.drugId} 超出药房分配限额`)
+		}
+		if (d.stock <= 0 || item.dosage > d.stock) {
+			errors.push(`药品 ${item.drugId} 库存不足`)
+		}
+	}
+	return { ok: errors.length === 0, errors }
+}
+
+export const api = {
+	async login(username: string, password: string): Promise<{ token: string; username: string }>{
+		await delay()
+		const match = users.find((u) => u.username === username && u.password === password)
+		if (!match) {
+			throw new Error('用户名或密码错误')
+		}
+		logOp({ user: username, action: 'LOGIN', targetType: 'AUTH', targetId: username, details: '用户登录' })
+		return { token: 'mock-token-' + Date.now(), username }
+	},
+	async getOperationLogs(): Promise<OperationLog[]> {
+		await delay()
+		return [...operationLogs]
+	},
 	async getDrugs(): Promise<Drug[]> {
-		await delay(300)
-		return [..._drugs]
+		await delay()
+		return [...drugs]
 	},
-
-	async createDrug(drug: Omit<Drug, 'id'>): Promise<Drug> {
-		await delay(500)
-		const newDrug = { ...drug, id: generateId('D') }
-		_drugs.push(newDrug)
-		return newDrug
+	async addDrug(payload: Drug): Promise<Drug> {
+		await delay()
+		drugs = [payload, ...drugs]
+		logOp({ user: 'admin', action: 'CREATE', targetType: 'DRUG', targetId: payload.id, details: payload.name })
+		return payload
 	},
-
-	async updateDrug(drug: Partial<Drug> & { id: string }): Promise<Drug> {
-		await delay(500)
-		const index = _drugs.findIndex(d => d.id === drug.id)
-		if (index === -1) throw new Error('药品不存在')
-		_drugs[index] = { ..._drugs[index], ...drug }
-		return _drugs[index]
+	async updateDrug(payload: Partial<Drug> & { id: string }): Promise<Drug> {
+		await delay()
+		const idx = drugs.findIndex((d) => d.id === payload.id)
+		if (idx < 0) throw new Error('药品不存在')
+		const updated: Drug = { ...drugs[idx], ...payload }
+		drugs[idx] = updated
+		logOp({ user: 'admin', action: 'UPDATE', targetType: 'DRUG', targetId: payload.id, details: updated.name })
+		return updated
 	},
-
 	async deleteDrug(id: string): Promise<void> {
-		await delay(300)
-		const index = _drugs.findIndex(d => d.id === id)
-		if (index === -1) throw new Error('药品不存在')
-		_drugs.splice(index, 1)
+		await delay()
+		const idx = drugs.findIndex((d) => d.id === id)
+		if (idx < 0) throw new Error('药品不存在')
+		drugs.splice(idx, 1)
+		logOp({ user: 'admin', action: 'DELETE', targetType: 'DRUG', targetId: id })
 	},
-
-	async getDrugById(id: string): Promise<Drug | null> {
-		await delay(200)
-		return _drugs.find(d => d.id === id) || null
-	}
-}
-
-// 药房相关API
-export const pharmaciesApi = {
 	async getPharmacies(): Promise<Pharmacy[]> {
-		await delay(300)
-		return [..._pharmacies]
+		await delay()
+		return [...pharmacies]
 	},
-
-	async createPharmacy(pharmacy: Omit<Pharmacy, 'id'>): Promise<Pharmacy> {
-		await delay(500)
-		const newPharmacy = { ...pharmacy, id: generateId('PH') }
-		_pharmacies.push(newPharmacy)
-		return newPharmacy
+	async getPharmacyById(id: string): Promise<Pharmacy | undefined> {
+		await delay()
+		return pharmacies.find((p) => p.id === id)
 	},
-
-	async updatePharmacy(pharmacy: Partial<Pharmacy> & { id: string }): Promise<Pharmacy> {
-		await delay(500)
-		const index = _pharmacies.findIndex(p => p.id === pharmacy.id)
-		if (index === -1) throw new Error('药房不存在')
-		_pharmacies[index] = { ..._pharmacies[index], ...pharmacy }
-		return _pharmacies[index]
+	async addPharmacy(payload: Pharmacy): Promise<Pharmacy> {
+		await delay()
+		pharmacies = [payload, ...pharmacies]
+		logOp({ user: 'admin', action: 'CREATE', targetType: 'PHARMACY', targetId: payload.id, details: payload.name })
+		return payload
 	},
-
+	async updatePharmacy(payload: Partial<Pharmacy> & { id: string }): Promise<Pharmacy> {
+		await delay()
+		const idx = pharmacies.findIndex((p) => p.id === payload.id)
+		if (idx < 0) throw new Error('药房不存在')
+		const updated: Pharmacy = { ...pharmacies[idx], ...payload }
+		pharmacies[idx] = updated
+		logOp({ user: 'admin', action: 'UPDATE', targetType: 'PHARMACY', targetId: payload.id, details: updated.name })
+		return updated
+	},
 	async deletePharmacy(id: string): Promise<void> {
-		await delay(300)
-		const index = _pharmacies.findIndex(p => p.id === id)
-		if (index === -1) throw new Error('药房不存在')
-		_pharmacies.splice(index, 1)
+		await delay()
+		const idx = pharmacies.findIndex((p) => p.id === id)
+		if (idx < 0) throw new Error('药房不存在')
+		pharmacies.splice(idx, 1)
+		logOp({ user: 'admin', action: 'DELETE', targetType: 'PHARMACY', targetId: id })
 	},
-
-	async getPharmacyById(id: string): Promise<Pharmacy | null> {
-		await delay(200)
-		return _pharmacies.find(p => p.id === id) || null
-	}
-}
-
-// 处方相关API
-export const prescriptionsApi = {
 	async getPrescriptions(): Promise<Prescription[]> {
-		await delay(300)
-		return [..._prescriptions]
+		await delay()
+		return [...prescriptions]
 	},
-
-	async createPrescription(prescription: Omit<Prescription, 'id'>): Promise<Prescription> {
-		await delay(500)
-		const newPrescription = { ...prescription, id: generateId('P') }
-		_prescriptions.push(newPrescription)
-		return newPrescription
+	async getPrescriptionById(id: string): Promise<Prescription | undefined> {
+		await delay()
+		return prescriptions.find((p) => p.id === id)
 	},
-
-	async updatePrescription(prescription: Partial<Prescription> & { id: string }): Promise<Prescription> {
-		await delay(500)
-		const index = _prescriptions.findIndex(p => p.id === prescription.id)
-		if (index === -1) throw new Error('处方不存在')
-		_prescriptions[index] = { ..._prescriptions[index], ...prescription }
-		return _prescriptions[index]
+	async addPrescription(payload: Prescription): Promise<Prescription> {
+		await delay()
+		prescriptions = [payload, ...prescriptions]
+		logOp({ user: 'admin', action: 'CREATE', targetType: 'PRESCRIPTION', targetId: payload.id })
+		return payload
 	},
-
+	async updatePrescription(payload: Partial<Prescription> & { id: string }): Promise<Prescription> {
+		await delay()
+		const idx = prescriptions.findIndex((p) => p.id === payload.id)
+		if (idx < 0) throw new Error('处方不存在')
+		const updated: Prescription = { ...prescriptions[idx], ...payload }
+		prescriptions[idx] = updated
+		logOp({ user: 'admin', action: 'UPDATE', targetType: 'PRESCRIPTION', targetId: payload.id })
+		return updated
+	},
 	async deletePrescription(id: string): Promise<void> {
-		await delay(300)
-		const index = _prescriptions.findIndex(p => p.id === id)
-		if (index === -1) throw new Error('处方不存在')
-		_prescriptions.splice(index, 1)
+		await delay()
+		const idx = prescriptions.findIndex((p) => p.id === id)
+		if (idx < 0) throw new Error('处方不存在')
+		prescriptions.splice(idx, 1)
+		logOp({ user: 'admin', action: 'DELETE', targetType: 'PRESCRIPTION', targetId: id })
 	},
+	async fulfillPrescription(id: string): Promise<FulfillmentResponse> {
+		await delay()
+		const p = prescriptions.find((x) => x.id === id)
+		if (!p) return { success: false, errors: ['处方不存在'] }
 
-	async getPrescriptionById(id: string): Promise<Prescription | null> {
-		await delay(200)
-		return _prescriptions.find(p => p.id === id) || null
-	},
-
-	async fulfillPrescription(id: string): Promise<{ success: boolean; errors?: string[] }> {
-		await delay(1000)
-		const prescription = _prescriptions.find(p => p.id === id)
-		if (!prescription) {
-			return { success: false, errors: ['处方不存在'] }
-		}
-
-		// 检查库存
-		const errors: string[] = []
-		for (const drugItem of prescription.drugs) {
-			const drug = _drugs.find(d => d.id === drugItem.drugId)
-			if (!drug) {
-				errors.push(`药品${drugItem.drugId}不存在`)
-			} else if (drug.stock < drugItem.dosage) {
-				errors.push(`药品${drug.name}库存不足`)
-			}
-		}
-
-		if (errors.length > 0) {
+		const { ok, errors } = checkPrescription(p)
+		if (!ok) {
+			p.status = 'FAILED'
+			auditLogs.unshift({
+				prescriptionId: p.id,
+				patientId: p.patientId,
+				pharmacyId: p.pharmacyId,
+				status: 'FAILED',
+				drugsRequested: [...p.drugs],
+				drugsDispensed: [],
+				failureReasons: errors,
+			})
+			logOp({ user: 'admin', action: 'FULFILL', targetType: 'FULFILLMENT', targetId: id, details: '失败: ' + errors.join('; ') })
 			return { success: false, errors }
 		}
 
-		// 扣减库存
-		for (const drugItem of prescription.drugs) {
-			const drug = _drugs.find(d => d.id === drugItem.drugId)
-			if (drug) {
-				drug.stock -= drugItem.dosage
-			}
+		for (const item of p.drugs) {
+			const d = drugs.find((x) => x.id === item.drugId)!
+			d.stock = Math.max(0, d.stock - item.dosage)
 		}
-
-		// 更新处方状态
-		prescription.status = 'FULFILLED'
-
-		// 记录操作日志
-		_operationLogs.push({
-			id: generateId('OL'),
-			timestamp: new Date().toISOString(),
-			user: 'system',
-			action: 'FULFILL',
-			targetType: 'PRESCRIPTION',
-			targetId: id,
-			details: '处方履约成功'
+		p.status = 'FULFILLED'
+		auditLogs.unshift({
+			prescriptionId: p.id,
+			patientId: p.patientId,
+			pharmacyId: p.pharmacyId,
+			status: 'SUCCESS',
+			drugsRequested: [...p.drugs],
+			drugsDispensed: [...p.drugs],
+			failureReasons: [],
 		})
-
+		logOp({ user: 'admin', action: 'FULFILL', targetType: 'FULFILLMENT', targetId: id, details: '成功' })
 		return { success: true }
-	}
-}
-
-// 审计日志相关API
-export const auditLogsApi = {
-	async getAuditLogs(filters?: { patientId?: string; pharmacyId?: string; success?: boolean }): Promise<AuditLog[]> {
-		await delay(300)
-		let logs = [..._auditLogs]
-		
-		if (filters) {
-			if (filters.patientId) {
-				logs = logs.filter(log => log.patientId.toLowerCase().includes(filters.patientId!.toLowerCase()))
+	},
+	async getAuditLogs(filter: AuditLogFilter = {}): Promise<AuditLog[]> {
+		await delay()
+		return auditLogs.filter((log) => {
+			if (filter.patientId && log.patientId !== filter.patientId) return false
+			if (filter.pharmacyId && log.pharmacyId !== filter.pharmacyId) return false
+			if (filter.success != null) {
+				const isSuccess = log.status === 'SUCCESS'
+				if (isSuccess !== filter.success) return false
 			}
-			if (filters.pharmacyId) {
-				logs = logs.filter(log => log.pharmacyId.toLowerCase().includes(filters.pharmacyId!.toLowerCase()))
-			}
-			if (filters.success !== undefined) {
-				logs = logs.filter(log => (filters.success ? log.status === 'SUCCESS' : log.status === 'FAILED'))
-			}
-		}
-		
-		return logs
-	}
-}
-
-// 操作日志相关API
-export const operationLogsApi = {
-	async getOperationLogs(): Promise<OperationLog[]> {
-		await delay(300)
-		return [..._operationLogs]
-	}
-}
-
-// 用户认证相关API
-export const authApi = {
-	async login(credentials: { username: string; password: string }): Promise<{ token: string; user: UserProfile }> {
-		await delay(500)
-		const user = _users.find(u => u.username === credentials.username && u.password === credentials.password)
-		if (!user) {
-			throw new Error('用户名或密码错误')
-		}
-
-		// 记录登录日志
-		_operationLogs.push({
-			id: generateId('OL'),
-			timestamp: new Date().toISOString(),
-			user: credentials.username,
-			action: 'LOGIN',
-			targetType: 'AUTH',
-			targetId: credentials.username,
-			details: '用户登录系统'
+			return true
 		})
-
-		return {
-			token: `token_${Date.now()}`,
-			user: { username: user.username, phone: user.phone, email: user.email }
-		}
 	},
-
-	async logout(): Promise<void> {
-		await delay(200)
-		// 记录登出日志
-		_operationLogs.push({
-			id: generateId('OL'),
-			timestamp: new Date().toISOString(),
-			user: 'system',
-			action: 'LOGOUT',
-			targetType: 'AUTH',
-			targetId: 'system',
-			details: '用户登出系统'
-		})
-	}
 }
 
-// 用户资料相关API
-export const userProfileApi = {
-	async getUserProfile(): Promise<UserProfile> {
-		await delay(300)
-		return { ...mockUserProfile }
-	},
-
-	async updateUserProfile(profile: Partial<UserProfile>): Promise<UserProfile> {
-		await delay(500)
-		Object.assign(mockUserProfile, profile)
-		return { ...mockUserProfile }
-	}
-}
-
-// 系统设置相关API
-export const systemSettingsApi = {
-	async getSystemSettings(): Promise<SystemSettings> {
-		await delay(300)
-		return { ..._settings }
-	},
-
-	async updateSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings> {
-		await delay(500)
-		Object.assign(_settings, settings)
-		return { ..._settings }
-	}
-}
-
-// 统一API导出
-export const api = {
-	drugs: drugsApi,
-	pharmacies: pharmaciesApi,
-	prescriptions: prescriptionsApi,
-	auditLogs: auditLogsApi,
-	operationLogs: operationLogsApi,
-	auth: authApi,
-	userProfile: userProfileApi,
-	systemSettings: systemSettingsApi,
-}
-
-// 测试相关导出
-export const __test__ = {
-	// 重置所有数据到初始状态
-	resetData() {
-		_drugs = [...mockDrugs]
-		_pharmacies = [...mockPharmacies]
-		_prescriptions = [...mockPrescriptions]
-		_auditLogs = [...mockAuditLogs]
-		_operationLogs = [...mockOperationLogs]
-		_users = [...mockUsers]
-		_settings = { ...mockSystemSettings }
-	},
-
-	// 获取当前数据状态
-	getDataState() {
-		return {
-			drugs: [..._drugs],
-			pharmacies: [..._pharmacies],
-			prescriptions: [..._prescriptions],
-			auditLogs: [..._auditLogs],
-			operationLogs: [..._operationLogs],
-			users: [..._users],
-			settings: { ..._settings }
-		}
-	},
-
-	// 处方校验逻辑
-	checkPrescription(prescription: Prescription): { ok: boolean; errors: string[] } {
-		const errors: string[] = []
-		
-		if (!prescription.id) errors.push('处方ID不能为空')
-		if (!prescription.patientId) errors.push('患者ID不能为空')
-		if (!prescription.pharmacyId) errors.push('药房ID不能为空')
-		if (!prescription.drugs || prescription.drugs.length === 0) {
-			errors.push('处方必须包含至少一个药品')
-		}
-
-		// 检查药品库存
-		for (const drugItem of prescription.drugs) {
-			const drug = _drugs.find(d => d.id === drugItem.drugId)
-			if (!drug) {
-				errors.push(`药品${drugItem.drugId}不存在`)
-			} else if (drug.stock < drugItem.dosage) {
-				errors.push(`药品${drug.name}库存不足，当前库存${drug.stock}，需要${drugItem.dosage}`)
-			}
-		}
-
-		return { ok: errors.length === 0, errors }
-	}
-} 
+export type { Prescription, PrescriptionDrugItem }
+export const __test__ = { isExpired, checkPrescription } 
