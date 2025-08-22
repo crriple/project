@@ -2,11 +2,13 @@
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const store = useStore()
+const { t } = useI18n()
 
 const formRef = ref()
 const form = reactive({ username: 'admin', password: '123456' })
@@ -19,7 +21,13 @@ const rules = {
 }
 
 onMounted(() => {
-	store.dispatch('initAuth')
+	// 检查本地存储的认证信息
+	const token = localStorage.getItem('token')
+	const username = localStorage.getItem('username')
+	if (token && username) {
+		store.commit('setAuth', { token, username })
+	}
+	
 	const saved = localStorage.getItem('remember_username')
 	if (saved) form.username = saved
 	if (store.state.token) router.replace('/')
@@ -30,9 +38,15 @@ const onSubmit = () => {
 		if (!valid || logging.value) return
 		try {
 			logging.value = true
-			await store.dispatch('login', { username: form.username, password: form.password })
+			const response = await store.dispatch('login', { username: form.username, password: form.password })
+			
+			// 保存认证信息到本地存储
+			localStorage.setItem('token', response.token)
+			localStorage.setItem('username', form.username)
+			
 			if (remember.value) localStorage.setItem('remember_username', form.username)
 			else localStorage.removeItem('remember_username')
+			
 			ElMessage.success('登录成功')
 			router.replace('/')
 		} catch (e) {
@@ -100,11 +114,8 @@ const onSubmit = () => {
 .brand{ text-align:center; margin-bottom: 6px; }
 .title{ font-size: 20px; font-weight: 700; color:#0ea5a9; }
 .subtitle{ font-size: 12px; color: #6b7280; }
-.actions{ display:flex; justify-content:space-between; width:100%; }
-.link{ color:#0ea5a9; font-size:12px; }
+.actions{ display:flex; justify-content:space-between; align-items:center; }
+.link{ color:#0ea5a9; text-decoration:none; }
 .btn-full{ width:100%; }
-.hint{ color:#6b7280; font-size:12px; margin-top:6px; text-align:center; }
-@media (max-width: 560px){
-	.login-card{ width: 92vw; }
-}
+.hint{ text-align:center; margin-top:16px; color:#6b7280; font-size:12px; }
 </style>

@@ -67,18 +67,3 @@ export interface OperationLog {
 	details?: string
 	timestamp: string
 } 
-
-// 用户基本信息
-export interface UserProfile {
-	username: string
-	password?: string
-	phone?: string
-	email?: string
-}
-
-// 系统设置
-export interface SystemSettings {
-	prescriptionStatusEditable: boolean
-	drugStatusEditable: boolean
-	smsReminderEnabled: boolean
-}

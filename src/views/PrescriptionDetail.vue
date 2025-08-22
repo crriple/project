@@ -1,82 +1,79 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, __test__ } from '../services/mockApi'
-import { ElMessage } from 'element-plus'
 import { useStore } from 'vuex'
-import type { Prescription } from '../types'
+import { useI18n } from 'vue-i18n'
+import Breadcrumb from '../components/Breadcrumb.vue'
 
 const route = useRoute()
 const store = useStore()
-const data = ref<Prescription | null>(null)
+const { t } = useI18n()
+const prescriptionId = route.params.id as string
 const loading = ref(false)
-const fulfilling = ref(false)
 
-const load = async () => {
-	loading.value = true
-	try {
-		const d = await api.getPrescriptionById(String(route.params.id))
-		data.value = d ?? null
-	} finally {
-		loading.value = false
-	}
-}
-
-onMounted(load)
-
-const check = computed(() => {
-	if (!data.value) return { ok: false, errors: ['无数据'] }
-	return __test__.checkPrescription(data.value)
+const prescription = computed(() => store.state.prescriptions.find((p) => p.id === prescriptionId))
+const drugs = computed(() => {
+	if (!prescription.value) return []
+	return store.state.drugs.filter((d) => prescription.value?.drugs.some((pd) => pd.drugId === d.id))
 })
 
-const fulfill = async () => {
-	if (!data.value || fulfilling.value) return
-	if (!check.value.ok) {
-		ElMessage.error('存在校验错误，无法履约')
-		return
-	}
-	fulfilling.value = true
+onMounted(async () => {
+	await fetchData()
+})
+
+const fetchData = async () => {
+	loading.value = true
 	try {
-		const res = await store.dispatch('fulfillPrescription', data.value.id)
-		if (res?.success) {
-			ElMessage.success('履约成功')
-			await load()
-		} else {
-			ElMessage.error(res?.errors?.join('；') ?? '履约失败')
-		}
+		await Promise.all([
+			store.dispatch('fetchPrescriptions'),
+			store.dispatch('fetchDrugs')
+		])
 	} finally {
-		fulfilling.value = false
+		loading.value = false
 	}
 }
 </script>
 
 <template>
-	<el-card>
-		<template #header>处方详情</template>
-		<div v-if="loading">加载中...</div>
-		<template v-else-if="data">
-			<div class="mb-2">
-				<b>处方ID：</b>{{ data.id }}　<b>患者：</b>{{ data.patientId }}　<b>药房：</b>{{ data.pharmacyId }}　<b>状态：</b>{{ data.status }}
-			</div>
-			<el-table :data="data.drugs">
-				<el-table-column prop="drugId" label="药品ID" />
-				<el-table-column prop="dosage" label="剂量" />
+	<!-- 面包屑导航 -->
+	<Breadcrumb />
+	
+	<el-card v-loading="loading">
+		<template #header>{{ t('prescriptions.title') }} - {{ t('common.details') }}</template>
+		
+		<!-- 添加数据检查 -->
+		<div v-if="!prescription" class="no-data">
+			<el-empty description="处方信息不存在" />
+		</div>
+		
+		<!-- 处方信息 -->
+		<el-descriptions v-else :column="2" border>
+			<el-descriptions-item :label="t('drugs.id')">{{ prescription.id }}</el-descriptions-item>
+			<el-descriptions-item :label="t('prescriptions.patientId')">{{ prescription.patientId }}</el-descriptions-item>
+			<el-descriptions-item :label="t('prescriptions.pharmacyId')">{{ prescription.pharmacyId }}</el-descriptions-item>
+			<el-descriptions-item :label="t('common.status')">{{ prescription.status }}</el-descriptions-item>
+		</el-descriptions>
+		
+		<el-divider />
+		
+		<div class="mb-4">
+			<h3>{{ t('drugs.title') }}</h3>
+			<el-table :data="drugs" v-if="drugs.length > 0">
+				<el-table-column :prop="'id'" :label="t('drugs.id')" width="120" />
+				<el-table-column :prop="'name'" :label="t('drugs.name')" />
+				<el-table-column :prop="'manufacturer'" :label="t('drugs.manufacturer')" />
+				<el-table-column :prop="'stock'" :label="t('drugs.stock')" width="120" />
 			</el-table>
-			<div class="mt-2">
-				<el-alert v-if="!check.ok" title="校验失败" type="error" :closable="false">
-					<ul style="margin: 8px 0 0 16px;">
-						<li v-for="(e, i) in check.errors" :key="i">{{ e }}</li>
-					</ul>
-				</el-alert>
-			</div>
-			<div class="mt-2">
-				<el-button type="primary" :disabled="!check.ok || fulfilling" :loading="fulfilling" @click="fulfill">履约</el-button>
-			</div>
-		</template>
+			<el-empty v-else :description="'暂无药品信息'" />
+		</div>
 	</el-card>
 </template>
 
 <style scoped>
-.mb-2 { margin-bottom: 8px; }
-.mt-2 { margin-top: 8px; }
+.mb-4 { margin-bottom: 16px; }
+
+.no-data {
+	text-align: center;
+	padding: 40px 0;
+}
 </style> 

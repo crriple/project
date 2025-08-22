@@ -98,26 +98,30 @@ const store = Vuex.createStore<RootState>({
 		},
 	},
 	actions: {
-		initAuth({ commit }: { commit: VuexStore<RootState>['commit'] }) {
-			const token = localStorage.getItem('token')
-			const username = localStorage.getItem('username')
-			if (token && username) commit('setAuth', { token, username })
+		// 认证相关
+		async login({ commit }: { commit: VuexStore<RootState>['commit'] }, credentials: { username: string; password: string }) {
+			try {
+				const response = await api.auth.login(credentials)
+				commit('setAuth', { token: response.token, username: credentials.username })
+				return response
+			} catch (error) {
+				throw error
+			}
 		},
-		async login({ commit }: { commit: VuexStore<RootState>['commit'] }, payload: { username: string; password: string }) {
-			const res = await api.login(payload.username, payload.password)
-			localStorage.setItem('token', res.token)
-			localStorage.setItem('username', res.username)
-			commit('setAuth', { token: res.token, username: res.username })
+		async logout({ commit }: { commit: VuexStore<RootState>['commit'] }) {
+			try {
+				await api.auth.logout()
+				commit('setAuth', { token: null, username: null })
+			} catch (error) {
+				console.error('Logout error:', error)
+			}
 		},
-		logout({ commit }: { commit: VuexStore<RootState>['commit'] }) {
-			localStorage.removeItem('token')
-			localStorage.removeItem('username')
-			commit('setAuth', { token: null, username: null })
-		},
+		
+		// 药品相关
 		async fetchDrugs({ commit }: { commit: VuexStore<RootState>['commit'] }) {
 			commit('setLoading', true)
 			try {
-				const res = await api.getDrugs()
+				const res = await api.drugs.getDrugs()
 				commit('setDrugs', res)
 			} catch (e: unknown) {
 				const message = e instanceof Error ? e.message : '获取药品失败'
@@ -126,79 +130,89 @@ const store = Vuex.createStore<RootState>({
 				commit('setLoading', false)
 			}
 		},
-		async createDrug({ commit }: { commit: VuexStore<RootState>['commit'] }, payload: Drug) {
-			const res = await api.addDrug(payload)
+		async createDrug({ commit }: { commit: VuexStore<RootState>['commit'] }, payload: Omit<Drug, 'id'>) {
+			const res = await api.drugs.createDrug(payload)
 			commit('addDrug', res)
 		},
 		async updateDrug({ commit }: { commit: VuexStore<RootState>['commit'] }, payload: Partial<Drug> & { id: string }) {
-			const res = await api.updateDrug(payload)
+			const res = await api.drugs.updateDrug(payload)
 			commit('replaceDrug', res)
 		},
 		async deleteDrug({ commit }: { commit: VuexStore<RootState>['commit'] }, id: string) {
-			await api.deleteDrug(id)
+			await api.drugs.deleteDrug(id)
 			commit('removeDrug', id)
 		},
+		
+		// 药房相关
 		async fetchPharmacies({ commit }: { commit: VuexStore<RootState>['commit'] }) {
-			const list = await api.getPharmacies()
+			const list = await api.pharmacies.getPharmacies()
 			commit('setPharmacies', list)
 		},
-		async createPharmacy({ commit }: { commit: VuexStore<RootState>['commit'] }, payload: Pharmacy) {
-			const res = await api.addPharmacy(payload)
+		async createPharmacy({ commit }: { commit: VuexStore<RootState>['commit'] }, payload: Omit<Pharmacy, 'id'>) {
+			const res = await api.pharmacies.createPharmacy(payload)
 			commit('addPharmacy', res)
 		},
 		async updatePharmacy({ commit }: { commit: VuexStore<RootState>['commit'] }, payload: Partial<Pharmacy> & { id: string }) {
-			const res = await api.updatePharmacy(payload)
+			const res = await api.pharmacies.updatePharmacy(payload)
 			commit('replacePharmacy', res)
 		},
 		async deletePharmacy({ commit }: { commit: VuexStore<RootState>['commit'] }, id: string) {
-			await api.deletePharmacy(id)
+			await api.pharmacies.deletePharmacy(id)
 			commit('removePharmacy', id)
 		},
+		
+		// 处方相关
 		async fetchPrescriptions({ commit }: { commit: VuexStore<RootState>['commit'] }) {
-			const list = await api.getPrescriptions()
+			const list = await api.prescriptions.getPrescriptions()
 			commit('setPrescriptions', list)
 		},
-		async createPrescription({ commit }: { commit: VuexStore<RootState>['commit'] }, payload: Prescription) {
-			const res = await api.addPrescription(payload)
+		async createPrescription({ commit }: { commit: VuexStore<RootState>['commit'] }, payload: Omit<Prescription, 'id'>) {
+			const res = await api.prescriptions.createPrescription(payload)
 			commit('addPrescription', res)
 		},
 		async updatePrescriptionAction({ commit }: { commit: VuexStore<RootState>['commit'] }, payload: Partial<Prescription> & { id: string }) {
-			const res = await api.updatePrescription(payload)
+			const res = await api.prescriptions.updatePrescription(payload)
 			commit('replacePrescription', res)
 		},
 		async deletePrescription({ commit }: { commit: VuexStore<RootState>['commit'] }, id: string) {
-			await api.deletePrescription(id)
+			await api.prescriptions.deletePrescription(id)
 			commit('removePrescription', id)
 		},
 		async fulfillPrescription(
 			{ dispatch }: { dispatch: VuexStore<RootState>['dispatch'] },
 			id: string,
 		) {
-			const res = await api.fulfillPrescription(id)
+			const res = await api.prescriptions.fulfillPrescription(id)
 			await dispatch('fetchPrescriptions')
 			return res
 		},
+		
+		// 日志相关
 		async fetchAuditLogs({ commit }: { commit: VuexStore<RootState>['commit'] }, filter?: Record<string, unknown>) {
-			const list = await api.getAuditLogs(filter)
+			const list = await api.auditLogs.getAuditLogs(filter)
 			commit('setAuditLogs', list)
 		},
 		async fetchOperationLogs({ commit }: { commit: VuexStore<RootState>['commit'] }) {
-			const list = await api.getOperationLogs()
+			const list = await api.operationLogs.getOperationLogs()
 			commit('setOperationLogs', list)
 		},
+		
+		// 用户资料相关
 		async fetchUserProfile({ commit, state }: { commit: VuexStore<RootState>['commit']; state: RootState }) {
 			if (!state.username) throw new Error('未登录')
-			const p = await api.getUserProfile(state.username)
+			const p = await api.userProfile.getUserProfile()
 			commit('setUserProfile', p)
 			return p
 		},
 		async updateUserProfile({ commit }: { commit: VuexStore<RootState>['commit'] }, payload: UserProfile) {
-			const p = await api.updateUserProfile(payload)
+			const p = await api.userProfile.updateUserProfile(payload)
 			commit('setUserProfile', p)
 			return p
 		},
+		
+		// 系统设置相关
 		async fetchSystemSettings({ commit }: { commit: VuexStore<RootState>['commit'] }) {
-			const s = await api.getSystemSettings()
+			const s = await api.systemSettings.getSystemSettings()
 			commit('setSystemSettings', s)
 			return s
 		},
@@ -206,7 +220,7 @@ const store = Vuex.createStore<RootState>({
 			{ commit }: { commit: VuexStore<RootState>['commit'] },
 			payload: Partial<SystemSettings>,
 		) {
-			const s = await api.updateSystemSettings(payload)
+			const s = await api.systemSettings.updateSystemSettings(payload)
 			commit('setSystemSettings', s)
 			return s
 		},
